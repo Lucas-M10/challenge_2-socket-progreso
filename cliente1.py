@@ -9,13 +9,18 @@ cliente = socket(AF_INET, SOCK_STREAM)
 cliente.connect ((HOST, PORT))
 
 #Recibimos el mensaje que envia el servidro 
-mensaje_servidor_bytes = cliente.recv (1024)
-mensaje_servidor = mensaje_servidor_bytes.decode ("utf-8")
-print (mensaje_servidor)
+while True:
+    mensaje_servidor_bytes = cliente.recv (1024)   
+    mensaje_servidor = mensaje_servidor_bytes.decode ("utf-8")
+    print (f"Servidor: {mensaje_servidor}")
 
-#Mandamos mensaje al servidor 
-mensaje_cliente = "Hola servidor soy el cliente 1"
-mensaje_cliente_bytes  = mensaje_cliente.encode ("utf-8")
-cliente.send (mensaje_cliente_bytes)
+    #Mandamos mensaje al servidor 
+    mensaje_cliente = input ("Cliente_1: ")
 
-cliente.close ()
+    if mensaje_cliente == "":
+        cliente.close ()
+        break
+    
+    else:
+        mensaje_cliente_bytes  = mensaje_cliente.encode ("utf-8")
+        cliente.send (mensaje_cliente_bytes)
