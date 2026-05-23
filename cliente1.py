@@ -18,6 +18,7 @@ cliente.connect ((HOST, PORT))
 nombre_bytes = nombre.encode ("utf-8")
 cliente.send (nombre_bytes)
 
+#Funcion que se encarga de recibir los mensajes e imprimir en pantalla 
 def recibir_mensaje ():
     while True:
         mensaje_bytes= cliente.recv (1024)
@@ -28,8 +29,9 @@ def recibir_mensaje ():
             break
 
         mensaje = mensaje_bytes.decode ("utf-8")
-        print (f"\nServidor: {mensaje}\n usuario: ", end="", flush=True)
+        print (f"\n{mensaje}\n usuario: ", end="", flush=True)
  
+#Funcion que se encarga de enviar los mensajes 
 def enviar_mensaje ():
     while True :
         mensaje = input ("")
