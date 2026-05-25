@@ -1,33 +1,43 @@
 from socket import socket, AF_INET, SOCK_STREAM
 from threading import Thread
+import sys
+import time
 
 HOST = "127.0.0.1"
 PORT = 5000
+MAX_INTENTOS = 3
+
 
 nombre = input ("Nombre de usuario: ")
 if nombre == "":
     nombre = "Anonimo"
 
-
 #Creo el socket
-cliente = socket(AF_INET, SOCK_STREAM)
+cliente =None
 
+def intentar_conexion ():
 #Me conecto al servidor pasandole la direccion y puerto que utilizaremos 
-try:
-    cliente.connect ((HOST, PORT))
+    global cliente
+    for intentos in range(MAX_INTENTOS):
+        try:
+            cliente = socket (AF_INET, SOCK_STREAM)
+            cliente.connect ((HOST, PORT))
 
-except ConnectionRefusedError:
-    print (f"No se pudo conectar al servidor. Verificar que el servidor este activo")
-    exit()
 
+        except ConnectionRefusedError:
+            print (f"Intento {intentos +1} de {MAX_INTENTOS} ")
+            
+            if intentos <MAX_INTENTOS-1:
+                time.sleep (3)
+            
+            else:
+                print (f"No se pudo conectar al servidor ")
+                sys.exit ()
+        
+        else:
+            cliente.send (nombre.encode("utf-8"))
+            break
 
-#Le envio el nombre como primer mensaje al servidor luego entra en el loop
-try:
-    nombre_bytes = nombre.encode ("utf-8")
-    cliente.send (nombre_bytes)
-
-except (ConnectionError, OSError) as error:
-    print(f"No se pudo enviar el nombre al servidor: \n{error}")
 
 #Funcion que se encarga de desconectar correcctamente
 def desconectar_cliente ():
@@ -48,9 +58,14 @@ def recibir_mensaje ():
 
         except (ConnectionResetError, OSError) as error:
             print(f"Error al recibir el mensaje: \n{error}")
-            desconectar_cliente ()
-            break
-        
+
+            if error.errno == 10054 :
+                intentar_conexion ()
+                continue
+            else:
+                desconectar_cliente ()
+                break
+
         else:
 
             if not mensaje_bytes:
@@ -60,6 +75,7 @@ def recibir_mensaje ():
             mensaje = mensaje_bytes.decode ("utf-8")
             print (f"\n{mensaje}\n{nombre}: ", end="", flush=True)
  
+
 #Funcion que se encarga de enviar los mensajes 
 def enviar_mensaje ():
 
@@ -77,12 +93,19 @@ def enviar_mensaje ():
             cliente.send (mensaje_bytes)
 
         except (BrokenPipeError, ConnectionResetError, OSError) as error:
-            print (f"Error al enviar mensaje: \n{error}")
-            desconectar_cliente ()
-            break
-
+            
+            if error.errno == 10054 :
+                intentar_conexion ()
+                continue
+            
+            else:
+                print (f"Error al enviar mensaje: {error}")
+                desconectar_cliente ()
+                break
 
 #Creamos los hilos e Iniciamos 
+intentar_conexion ()
+
 hilo_enviar = Thread (target= enviar_mensaje)
 hilo_recibir = Thread (target= recibir_mensaje)
 

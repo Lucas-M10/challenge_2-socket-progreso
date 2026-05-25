@@ -41,7 +41,6 @@ Puerto: {cliente_address[1]}""")
 
 #Funcion que se encarga de recibir el mensaje de los clientes
 def manejar_cliente (cliente_socket:socket, cliente_address:tuple, nombre:str ):
-
     while True:
 
         try :     
