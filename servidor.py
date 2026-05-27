@@ -1,115 +1,124 @@
-from socket import *
-from threading import Thread
+from threading import Lock, Thread
+from socket import AF_INET, SOCK_STREAM, socket
+import sys
 
-#Lista que nos ayudara a guardar a los clientes que se van uniendo
+IP = "127.0.0.1"
+PORT = 5000
+
 clientes = []
 
-#Funcion que se encarga de enviar el mensaje a los clientes
-def broadcast (mensaje:str, cliente_emisor:socket, nombre_cliente):
+cliente_lock = Lock ()
 
-    mensaje_bytes = mensaje.encode ("utf-8")
+# Funcion que crea el server 
+def crear_server ():
+    server = socket (AF_INET, SOCK_STREAM)
+    server.bind((IP, PORT))
+    server.listen ()
+    return server
 
-    for cliente_socket, nombre in clientes.copy ():
-
-        if not cliente_socket == cliente_emisor:
-
-            try:
-                cliente_socket.send (mensaje_bytes)
-
-            except (OSError, ConnectionError) as error:
-                print (f"Error {nombre} : {error}")
-                desconectar_cliente (cliente_socket, None, nombre)
-
-
-#Funcion que se encarga de sacar al cliente de la lista 
-def desconectar_cliente (cliente_socket:socket, cliente_address:tuple , cliente_nombre:str ):
-
-    if (cliente_socket, cliente_nombre) in clientes:
-
-        clientes.remove ((cliente_socket, cliente_nombre))
+#Funcion que se encarga de reenviar los mensajes 
+def broadcast (cliente_socket:socket, mensaje:str):
     
-    cliente_socket.close ()
+    for cliente in clientes.copy():
 
-    if cliente_address:
-        print (f"""\n{cliente_nombre} se desconecto desde : 
-ID: {cliente_address[0]}
-Puerto: {cliente_address[1]}""")
-        
-    else:
-        print (f"\n{cliente_nombre} se desconecto ")
-        
+        #sino es el cliente que envio entonces envia el mensaje
+        if not cliente == cliente_socket:
+            mensaje_bytes = mensaje.encode ("utf-8")
 
-#Funcion que se encarga de recibir el mensaje de los clientes
-def manejar_cliente (cliente_socket:socket, cliente_address:tuple, nombre:str ):
+            try :
+                cliente.send(mensaje_bytes)
+
+            except OSError:
+                print (f"{cliente} se desconecto")
+                desconectar_cliente (cliente, "Desconocido")       
+
+
+# Se va a encargar de recibir los mensajes y de desconectar si es que se envio un vacio
+def manejar_cliente (cliente_socket:socket, cliente_nombre):
     while True:
 
-        try :     
-            #Recibe mensaje del cliente  
+        #espera un mensaje si es que no recibe nada salta al bloque except
+        try:
             mensaje_cliente_bytes = cliente_socket.recv (1024)
 
-        except (ConnectionError, OSError) as error:
-            print (f"Error con {nombre}: {error} \n")
-            desconectar_cliente (cliente_socket, cliente_address, nombre)
+        #Imprimirmos un mensaje luego enviamos un mensaje de desconexion, cerramos el socket y cortamos el bucle
+        except OSError:
+            print (f"El cliente {cliente_nombre} se desconecto")
+            mensaje_desconexion = f"{cliente_nombre} se desconecto"
+            broadcast (cliente_socket, mensaje_desconexion)
+            desconectar_cliente (cliente_socket, cliente_nombre)
             break
 
-        else: 
-
-            #Sino recibio un mensaje entonces cierra el bucle y cierra el socket 
+        #Si es que el mensaje llega vacio cerramos el socket y sino entonces mandamos el mensaje a todos 
+        else:
             if not mensaje_cliente_bytes:
-                
-                #Removemos al cliente de la lista y cerramos el socket
-                desconectar_cliente (cliente_socket, cliente_address, nombre)
+
+                print (f"{cliente_nombre} se desconecto")
+                desconectar_cliente (cliente_socket, cliente_nombre)
                 break
-            
-            #Imprimimos el mensaje del cliente
-            mensaje_cliente = mensaje_cliente_bytes.decode ("utf-8")
-            mensaje_id = f"{nombre}: {mensaje_cliente}"
-            print (f"{mensaje_id}")
 
-            #Llamo a la funcion que se encargara de reenviar los mensajes 
-            broadcast (mensaje_id, cliente_socket, nombre)
+            else:
+                mensaje_cliente = mensaje_cliente_bytes.decode ("utf-8")
+                mensaje_cliente = f"{cliente_nombre}: {mensaje_cliente}"
+                print (f"{mensaje_cliente}\n")
+                broadcast (cliente_socket, mensaje_cliente)
 
 
-#Creamos el socket y le decimos:
-#Por donde van a viajar los datos (AF_INET) y como se van a transportar (SOCK_STREAM) 
-server = socket(AF_INET, SOCK_STREAM)
+#Funcion que se encarga de desconectar
+def desconectar_cliente (cliente_socket:socket, cliente_nombre):
+    #Bloqueamos la lista de clientes mientras removemos al cliente
+    with cliente_lock:
+        if cliente_socket in clientes:
+            clientes.remove (cliente_socket)
+    
+    #Cerramos el socekt del cliente
+    cliente_socket.close ()
+    print (f"{cliente_nombre} abandono el server")
 
-#Creamos la direccion del server 
-server.bind (("127.0.0.1", 5000))
+#Hilo principal que se encarga de aceptar a los clientes 
+def aceptar_cliente (server:socket):
+    server.settimeout (1)
+    while True:
 
-#Le decimos que se quede esperando conexiones de clientes 
-server.listen ()
+        #Acepta a los clientes que se van conectando 
+        try:
+            cliente_socket, cliente_address = server.accept ()
 
-#Loop que se encarga de aceptar a los clientes 
-while True:
-
-    #Aceptamos al cliente y recibos el mensaje como su direccion
-    cliente_socket, cliente_address = server.accept ()
-
-    try:
-        nombre_bytes = cliente_socket.recv (1024)
-
-        nombre_cliente = nombre_bytes.decode ("utf-8")
-
-    except (ConnectionError, OSError, UnicodeDecodeError) as error:
-
-        print (f"Error: {error} ")
-        cliente_socket.close ()
-        continue
-
-    else: 
-
-        if not nombre_bytes:
-            print ("Cliente se desconecto")
-            cliente_socket.close ()
+        except TimeoutError:
             continue
 
-        clientes.append ((cliente_socket, nombre_cliente))
+        mensaje = "Bienvenido al servidor"
+        mensaje_bytes = mensaje.encode ("utf-8")
+        
+        #Si es que el cliente manda un nombre corre perfecto si se deconecta pasa al bloque except
+        try:
+            cliente_socket.send (mensaje_bytes)
+            cliente_nombre = cliente_socket.recv (1024)
 
-        #Se encarga de impimir el nombre del usuario 
-        print (f"""\n{nombre_cliente} se conecto desde:
-ID: {cliente_address[0]}
-Puerto: {cliente_address[1]}\n""")
+        #El bloque se encarga de cerrar el socket que fallo 
+        except OSError:
+            print (f"Se desconecto el cliente ")
+            cliente_socket.close ()
+            continue
+        
+        #Si no fallo en el try entonces asignamos un nombre si llego vacio sino entonces imprimimos el nombre 
+        else:
+            if not cliente_nombre:
+                cliente_nombre = "Anonimo"
 
-        hilo = Thread (target=manejar_cliente, args=(cliente_socket, cliente_address, nombre_cliente))
-        hilo.start ()
+            cliente_nombre = cliente_nombre.decode ("utf-8")
+
+            #Bloqueo la lista clientes para añadir un nuevo cliente
+            with cliente_lock:
+                clientes.append (cliente_socket)
+
+            print (f"""\n{cliente_nombre} se conecto desde:
+IP: {cliente_address[0]}
+PORT: {cliente_address[1]}\n""")
+            
+            hilo = Thread (target=manejar_cliente, args= (cliente_socket, cliente_nombre), daemon=True)
+            hilo.start()
+
+
+server = crear_server()
+aceptar_cliente (server)
