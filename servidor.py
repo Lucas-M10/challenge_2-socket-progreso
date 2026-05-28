@@ -1,6 +1,5 @@
 from threading import Lock, Thread
 from socket import AF_INET, SOCK_STREAM, socket
-import sys
 
 IP = "127.0.0.1"
 PORT = 5000
@@ -60,7 +59,7 @@ def manejar_cliente (cliente_socket:socket, cliente_nombre):
             else:
                 mensaje_cliente = mensaje_cliente_bytes.decode ("utf-8")
                 mensaje_cliente = f"{cliente_nombre}: {mensaje_cliente}"
-                print (f"{mensaje_cliente}\n")
+                print (f"{mensaje_cliente}")
                 broadcast (cliente_socket, mensaje_cliente)
 
 
@@ -73,10 +72,11 @@ def desconectar_cliente (cliente_socket:socket, cliente_nombre):
     
     #Cerramos el socekt del cliente
     cliente_socket.close ()
-    print (f"{cliente_nombre} abandono el server")
+    broadcast (cliente_socket, f"{cliente_nombre} abandono el server")
 
 #Hilo principal que se encarga de aceptar a los clientes 
 def aceptar_cliente (server:socket):
+    #Utilizamos el timeout para poder darle un segundo al 
     server.settimeout (1)
     while True:
 
@@ -116,7 +116,7 @@ def aceptar_cliente (server:socket):
 IP: {cliente_address[0]}
 PORT: {cliente_address[1]}\n""")
             
-            hilo = Thread (target=manejar_cliente, args= (cliente_socket, cliente_nombre), daemon=True)
+            hilo = Thread (target=manejar_cliente, args= (cliente_socket, cliente_nombre))
             hilo.start()
 
 
